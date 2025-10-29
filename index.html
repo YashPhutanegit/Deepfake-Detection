@@ -1,0 +1,550 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Deepfake Detection - Forensic Analysis</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        * {
+            font-family: 'Space Grotesk', sans-serif;
+        }
+        
+        body {
+            background: #0a0a0f;
+            background-image: 
+                radial-gradient(at 0% 0%, rgba(99, 102, 241, 0.15) 0px, transparent 50%),
+                radial-gradient(at 100% 100%, rgba(167, 139, 250, 0.15) 0px, transparent 50%);
+        }
+        
+        .glass {
+            background: rgba(17, 17, 27, 0.7);
+            backdrop-filter: blur(16px);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+        }
+        
+        .glass-hover {
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        
+        .glass-hover:hover {
+            background: rgba(17, 17, 27, 0.85);
+            border-color: rgba(99, 102, 241, 0.3);
+            transform: translateY(-2px);
+        }
+        
+        .upload-zone {
+            border: 2px dashed rgba(99, 102, 241, 0.3);
+            transition: all 0.4s ease;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .upload-zone::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background: radial-gradient(circle at center, rgba(99, 102, 241, 0.1), transparent 70%);
+            opacity: 0;
+            transition: opacity 0.4s ease;
+        }
+        
+        .upload-zone:hover::before {
+            opacity: 1;
+        }
+        
+        .upload-zone:hover {
+            border-color: rgba(99, 102, 241, 0.6);
+            background: rgba(99, 102, 241, 0.02);
+        }
+        
+        .upload-zone.dragover {
+            border-color: rgba(139, 92, 246, 0.8);
+            background: rgba(139, 92, 246, 0.05);
+            transform: scale(1.02);
+        }
+        
+        .btn-primary {
+            background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+            box-shadow: 0 4px 20px rgba(99, 102, 241, 0.4);
+            transition: all 0.3s ease;
+        }
+        
+        .btn-primary:hover:not(:disabled) {
+            box-shadow: 0 6px 30px rgba(99, 102, 241, 0.6);
+            transform: translateY(-2px);
+        }
+        
+        .btn-primary:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        
+        .result-real { background: linear-gradient(135deg, rgba(16, 185, 129, 0.2) 0%, rgba(5, 150, 105, 0.1) 100%); }
+        .result-ai { background: linear-gradient(135deg, rgba(239, 68, 68, 0.2) 0%, rgba(220, 38, 38, 0.1) 100%); }
+        .result-downloaded { background: linear-gradient(135deg, rgba(245, 158, 11, 0.2) 0%, rgba(217, 119, 6, 0.1) 100%); }
+        .result-edited { background: linear-gradient(135deg, rgba(139, 92, 246, 0.2) 0%, rgba(124, 58, 237, 0.1) 100%); }
+        .result-inconclusive { background: linear-gradient(135deg, rgba(107, 114, 128, 0.2) 0%, rgba(75, 85, 99, 0.1) 100%); }
+        
+        .metric-card {
+            background: rgba(30, 30, 46, 0.5);
+            border: 1px solid rgba(255, 255, 255, 0.03);
+            transition: all 0.3s ease;
+        }
+        
+        .metric-card:hover {
+            background: rgba(30, 30, 46, 0.7);
+            border-color: rgba(99, 102, 241, 0.2);
+            transform: translateY(-4px);
+        }
+        
+        .fade-in {
+            animation: fadeInUp 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        
+        @keyframes fadeInUp {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+        
+        .glow {
+            box-shadow: 0 0 30px rgba(99, 102, 241, 0.3);
+        }
+        
+        .spinner {
+            border: 3px solid rgba(255, 255, 255, 0.1);
+            border-top-color: #6366f1;
+            border-radius: 50%;
+            width: 24px;
+            height: 24px;
+            animation: spin 0.8s linear infinite;
+        }
+        
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        
+        .text-gradient {
+            background: linear-gradient(135deg, #6366f1 0%, #a78bfa 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+        
+        .divider {
+            height: 1px;
+            background: linear-gradient(90deg, transparent, rgba(99, 102, 241, 0.3), transparent);
+        }
+        
+        pre {
+            scrollbar-width: thin;
+            scrollbar-color: rgba(99, 102, 241, 0.5) rgba(30, 30, 46, 0.3);
+        }
+        
+        pre::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        
+        pre::-webkit-scrollbar-track {
+            background: rgba(30, 30, 46, 0.3);
+            border-radius: 3px;
+        }
+        
+        pre::-webkit-scrollbar-thumb {
+            background: rgba(99, 102, 241, 0.5);
+            border-radius: 3px;
+        }
+        
+        pre::-webkit-scrollbar-thumb:hover {
+            background: rgba(99, 102, 241, 0.7);
+        }
+    </style>
+</head>
+<body class="min-h-screen text-gray-100">
+    
+    <!-- Header -->
+    <header class="py-12">
+        <div class="container mx-auto px-6 text-center">
+            <h1 class="text-5xl font-bold mb-3 text-gradient">Deepfake Detection</h1>
+            <p class="text-gray-400 text-lg">Forensic Image Analysis System</p>
+        </div>
+    </header>
+
+    <!-- Main Container -->
+    <main class="container mx-auto px-6 pb-16 max-w-6xl">
+        
+        <!-- Upload Section -->
+        <div class="grid md:grid-cols-2 gap-8 mb-12">
+            
+            <!-- Reference Image -->
+            <div class="glass glass-hover rounded-2xl p-8">
+                <div class="flex items-center gap-3 mb-6">
+                    <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-500 to-teal-500 flex items-center justify-center">
+                        <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                        </svg>
+                    </div>
+                    <h2 class="text-xl font-semibold">Reference Image</h2>
+                </div>
+                
+                <div class="upload-zone rounded-xl p-12 text-center cursor-pointer" id="realUploadBox">
+                    <input type="file" id="realImageInput" accept="image/*" class="hidden">
+                    <div id="realPreview" class="hidden">
+                        <img id="realImg" class="max-h-72 mx-auto rounded-xl shadow-2xl mb-4">
+                        <p class="text-sm text-gray-400 font-medium" id="realFileName"></p>
+                    </div>
+                    <div id="realPlaceholder">
+                        <div class="w-16 h-16 mx-auto mb-4 rounded-2xl bg-gradient-to-br from-indigo-500/20 to-purple-500/20 flex items-center justify-center">
+                            <svg class="w-8 h-8 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/>
+                            </svg>
+                        </div>
+                        <p class="text-gray-300 font-medium mb-2">Drop image or click to browse</p>
+                        <p class="text-sm text-gray-500">PNG or JPG • Max 10MB</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Test Image -->
+            <div class="glass glass-hover rounded-2xl p-8">
+                <div class="flex items-center gap-3 mb-6">
+                    <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-500 flex items-center justify-center">
+                        <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+                        </svg>
+                    </div>
+                    <h2 class="text-xl font-semibold">Test Image</h2>
+                </div>
+                
+                <div class="upload-zone rounded-xl p-12 text-center cursor-pointer" id="testUploadBox">
+                    <input type="file" id="testImageInput" accept="image/*" class="hidden">
+                    <div id="testPreview" class="hidden">
+                        <img id="testImg" class="max-h-72 mx-auto rounded-xl shadow-2xl mb-4">
+                        <p class="text-sm text-gray-400 font-medium" id="testFileName"></p>
+                    </div>
+                    <div id="testPlaceholder">
+                        <div class="w-16 h-16 mx-auto mb-4 rounded-2xl bg-gradient-to-br from-indigo-500/20 to-purple-500/20 flex items-center justify-center">
+                            <svg class="w-8 h-8 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/>
+                            </svg>
+                        </div>
+                        <p class="text-gray-300 font-medium mb-2">Drop image or click to browse</p>
+                        <p class="text-sm text-gray-500">PNG or JPG • Max 10MB</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Analyze Button -->
+        <div class="text-center mb-16">
+            <button id="analyzeBtn" disabled class="btn-primary px-12 py-4 rounded-full font-semibold text-lg disabled:opacity-50 disabled:cursor-not-allowed">
+                <span id="btnText" class="flex items-center gap-3 justify-center">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/>
+                    </svg>
+                    Analyze Images
+                </span>
+                <span id="btnLoader" class="hidden flex items-center gap-3 justify-center">
+                    <div class="spinner"></div>
+                    Analyzing
+                </span>
+            </button>
+        </div>
+
+        <!-- Error Message -->
+        <div id="errorMessage" class="hidden glass rounded-xl p-6 mb-8 border-red-500/30 fade-in">
+            <div class="flex items-center gap-4">
+                <div class="w-10 h-10 rounded-full bg-red-500/20 flex items-center justify-center flex-shrink-0">
+                    <svg class="w-5 h-5 text-red-400" fill="currentColor" viewBox="0 0 20 20">
+                        <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd"/>
+                    </svg>
+                </div>
+                <div>
+                    <p class="font-semibold text-red-400 mb-1">Analysis Failed</p>
+                    <p class="text-gray-400 text-sm" id="errorText"></p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Results Section -->
+        <div id="resultsSection" class="hidden fade-in">
+            
+            <!-- Main Result -->
+            <div id="resultCard" class="glass rounded-2xl p-10 mb-8 border-2 glow">
+                <div class="text-center">
+                    <div class="text-7xl mb-6" id="resultIcon">🎯</div>
+                    <h2 class="text-4xl font-bold mb-3" id="resultTitle">Analysis Complete</h2>
+                    <p class="text-gray-400 text-lg mb-8" id="resultSubtitle">Classification Result</p>
+                    <div class="inline-block px-8 py-3 rounded-full bg-white/5">
+                        <span class="text-5xl font-bold" id="confidenceScore">95%</span>
+                        <span class="text-gray-400 text-lg ml-3">confidence</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Metrics -->
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+                <div class="metric-card rounded-xl p-6 text-center">
+                    <p class="text-xs text-gray-500 uppercase tracking-wider mb-2">Correlation</p>
+                    <p class="text-3xl font-bold text-indigo-400" id="correlationValue">0.85</p>
+                </div>
+                <div class="metric-card rounded-xl p-6 text-center">
+                    <p class="text-xs text-gray-500 uppercase tracking-wider mb-2">EXIF Data</p>
+                    <p class="text-3xl font-bold" id="exifValue">✓</p>
+                </div>
+                <div class="metric-card rounded-xl p-6 text-center">
+                    <p class="text-xs text-gray-500 uppercase tracking-wider mb-2">Compression</p>
+                    <p class="text-3xl font-bold text-orange-400" id="compressionValue">0.32</p>
+                </div>
+                <div class="metric-card rounded-xl p-6 text-center">
+                    <p class="text-xs text-gray-500 uppercase tracking-wider mb-2">AI Pattern</p>
+                    <p class="text-3xl font-bold text-red-400" id="aiScoreValue">0.15</p>
+                </div>
+            </div>
+
+            <!-- Justification -->
+            <div class="glass rounded-2xl p-8 mb-8">
+                <div class="flex items-center gap-3 mb-6">
+                    <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center">
+                        <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                        </svg>
+                    </div>
+                    <h3 class="text-xl font-semibold">Forensic Analysis Report</h3>
+                </div>
+                <div id="justificationText" class="text-gray-300 leading-relaxed whitespace-pre-line"></div>
+            </div>
+
+            <!-- Technical Details -->
+            <div class="glass rounded-2xl overflow-hidden">
+                <button id="technicalToggle" class="w-full p-8 text-left hover:bg-white/5 transition-all">
+                    <div class="flex items-center justify-between">
+                        <div class="flex items-center gap-3">
+                            <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-cyan-500 to-blue-500 flex items-center justify-center">
+                                <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"/>
+                                </svg>
+                            </div>
+                            <h3 class="text-xl font-semibold">Technical Details</h3>
+                        </div>
+                        <svg id="toggleIcon" class="w-6 h-6 transform transition-transform text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                        </svg>
+                    </div>
+                </button>
+                
+                <div id="technicalDetails" class="hidden p-8 pt-0">
+                    <div class="divider mb-8"></div>
+                    
+                    <div class="grid md:grid-cols-2 gap-6 mb-8">
+                        <div>
+                            <div class="flex items-center gap-2 mb-4">
+                                <div class="w-2 h-2 rounded-full bg-emerald-400"></div>
+                                <h4 class="font-semibold text-emerald-400">Reference EXIF</h4>
+                            </div>
+                            <pre id="realExif" class="bg-black/30 p-4 rounded-xl text-xs text-gray-300 overflow-auto max-h-64"></pre>
+                        </div>
+                        <div>
+                            <div class="flex items-center gap-2 mb-4">
+                                <div class="w-2 h-2 rounded-full bg-blue-400"></div>
+                                <h4 class="font-semibold text-blue-400">Test EXIF</h4>
+                            </div>
+                            <pre id="testExif" class="bg-black/30 p-4 rounded-xl text-xs text-gray-300 overflow-auto max-h-64"></pre>
+                        </div>
+                    </div>
+                    
+                    <div class="divider mb-8"></div>
+                    
+                    <div class="flex items-center gap-2 mb-4">
+                        <div class="w-2 h-2 rounded-full bg-purple-400"></div>
+                        <h4 class="font-semibold text-purple-400">Forensic Features</h4>
+                    </div>
+                    <div class="grid md:grid-cols-2 gap-6">
+                        <div class="bg-black/30 p-6 rounded-xl">
+                            <p class="text-xs text-gray-500 uppercase tracking-wider mb-3">Reference Image</p>
+                            <pre id="realFeatures" class="text-xs text-gray-300"></pre>
+                        </div>
+                        <div class="bg-black/30 p-6 rounded-xl">
+                            <p class="text-xs text-gray-500 uppercase tracking-wider mb-3">Test Image</p>
+                            <pre id="testFeatures" class="text-xs text-gray-300"></pre>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <script>
+        let realImageFile = null;
+        let testImageFile = null;
+
+        function setupUpload(boxId, inputId, previewId, imgId, fileNameId, placeholderId) {
+            const box = document.getElementById(boxId);
+            const input = document.getElementById(inputId);
+            const preview = document.getElementById(previewId);
+            const img = document.getElementById(imgId);
+            const fileName = document.getElementById(fileNameId);
+            const placeholder = document.getElementById(placeholderId);
+
+            box.addEventListener('click', () => input.click());
+
+            box.addEventListener('dragover', (e) => {
+                e.preventDefault();
+                box.classList.add('dragover');
+            });
+
+            box.addEventListener('dragleave', () => {
+                box.classList.remove('dragover');
+            });
+
+            box.addEventListener('drop', (e) => {
+                e.preventDefault();
+                box.classList.remove('dragover');
+                const file = e.dataTransfer.files[0];
+                if (file && file.type.startsWith('image/')) {
+                    handleFile(file, boxId);
+                }
+            });
+
+            input.addEventListener('change', (e) => {
+                const file = e.target.files[0];
+                if (file) handleFile(file, boxId);
+            });
+
+            function handleFile(file, boxType) {
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    img.src = e.target.result;
+                    fileName.textContent = file.name;
+                    preview.classList.remove('hidden');
+                    placeholder.classList.add('hidden');
+                };
+                reader.readAsDataURL(file);
+
+                if (boxType === 'realUploadBox') {
+                    realImageFile = file;
+                } else {
+                    testImageFile = file;
+                }
+                checkReadyToAnalyze();
+            }
+        }
+
+        setupUpload('realUploadBox', 'realImageInput', 'realPreview', 'realImg', 'realFileName', 'realPlaceholder');
+        setupUpload('testUploadBox', 'testImageInput', 'testPreview', 'testImg', 'testFileName', 'testPlaceholder');
+
+        function checkReadyToAnalyze() {
+            document.getElementById('analyzeBtn').disabled = !(realImageFile && testImageFile);
+        }
+
+        document.getElementById('analyzeBtn').addEventListener('click', async () => {
+            const analyzeBtn = document.getElementById('analyzeBtn');
+            const btnText = document.getElementById('btnText');
+            const btnLoader = document.getElementById('btnLoader');
+            const resultsSection = document.getElementById('resultsSection');
+            const errorMessage = document.getElementById('errorMessage');
+
+            analyzeBtn.disabled = true;
+            btnText.classList.add('hidden');
+            btnLoader.classList.remove('hidden');
+            resultsSection.classList.add('hidden');
+            errorMessage.classList.add('hidden');
+
+            try {
+                const formData = new FormData();
+                formData.append('real_image', realImageFile);
+                formData.append('test_image', testImageFile);
+
+                const response = await fetch('http://127.0.0.1:5000/analyze', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                if (!response.ok) throw new Error('Analysis failed');
+
+                const data = await response.json();
+                displayResults(data);
+
+            } catch (error) {
+                showError(error.message);
+            } finally {
+                analyzeBtn.disabled = false;
+                btnText.classList.remove('hidden');
+                btnLoader.classList.add('hidden');
+            }
+        });
+
+        function displayResults(data) {
+            const resultsSection = document.getElementById('resultsSection');
+            const resultCard = document.getElementById('resultCard');
+            const resultIcon = document.getElementById('resultIcon');
+            const resultTitle = document.getElementById('resultTitle');
+            const confidenceScore = document.getElementById('confidenceScore');
+
+            resultCard.className = 'glass rounded-2xl p-10 mb-8 border-2 glow result-' + data.category;
+
+            const icons = {
+                'real': '✅',
+                'ai': '🤖',
+                'downloaded': '📥',
+                'edited': '✏️',
+                'inconclusive': '❓'
+            };
+            resultIcon.textContent = icons[data.category] || '🎯';
+
+            resultTitle.textContent = data.result;
+            confidenceScore.textContent = data.confidence + '%';
+
+            document.getElementById('correlationValue').textContent = data.correlation_score;
+            document.getElementById('exifValue').textContent = data.metadata_present ? '✓' : '✗';
+            document.getElementById('exifValue').className = 'text-3xl font-bold ' + (data.metadata_present ? 'text-emerald-400' : 'text-red-400');
+            document.getElementById('compressionValue').textContent = data.compression_score;
+            document.getElementById('aiScoreValue').textContent = data.color_ai_score;
+
+            document.getElementById('justificationText').textContent = data.justification;
+
+            document.getElementById('realExif').textContent = formatJSON(data.technical_details.real_exif);
+            document.getElementById('testExif').textContent = formatJSON(data.technical_details.test_exif);
+            document.getElementById('realFeatures').textContent = formatJSON(data.technical_details.forensic_features_real);
+            document.getElementById('testFeatures').textContent = formatJSON(data.technical_details.forensic_features_test);
+
+            resultsSection.classList.remove('hidden');
+            setTimeout(() => {
+                resultsSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }, 100);
+        }
+
+        function formatJSON(obj) {
+            return typeof obj === 'string' ? obj : JSON.stringify(obj, null, 2);
+        }
+
+        function showError(message) {
+            const errorMessage = document.getElementById('errorMessage');
+            document.getElementById('errorText').textContent = message;
+            errorMessage.classList.remove('hidden');
+            errorMessage.scrollIntoView({ behavior: 'smooth' });
+        }
+
+        document.getElementById('technicalToggle').addEventListener('click', () => {
+            const details = document.getElementById('technicalDetails');
+            const icon = document.getElementById('toggleIcon');
+            
+            if (details.classList.contains('hidden')) {
+                details.classList.remove('hidden');
+                icon.style.transform = 'rotate(180deg)';
+            } else {
+                details.classList.add('hidden');
+                icon.style.transform = 'rotate(0deg)';
+            }
+        });
+    </script>
+</body>
+</html>
